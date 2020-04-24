@@ -1,4 +1,5 @@
 import discord
+from discord.ext import commands
 import re
 import asyncio
 from tf_logs import get_player_log_list, get_latest_log_descr, get_log, summarize_log, get_latest_log
@@ -6,20 +7,22 @@ from log_user import LogUser
 from events import Events
 
 
-CMD_PREFIX = "!"
+CMD_PREFIX = '!'
 
 
-class LogClient(discord.Client):
-    __events__ = ('on_subscribe', 'on_unsubscribe', )
+class LogBot(commands.Bot):
+    __events__ = ('on_subscribe', 'on_unsubscribe')
     def __init__(self, token):
-        super(LogClient, self).__init__()
+        super(LogBot, self).__init__(command_prefix=CMD_PREFIX)
         self.token = token
         self.subscribed_users = []
         self.events = Events()
 
+        self._apply_commands()
+
 
     def run(self):
-        super(LogClient, self).run(self.token)
+        super(LogBot, self).run(self.token)
 
 
     def get_subscribed_user(self, discord_user_id=None, steam_id_64=None):
@@ -77,12 +80,13 @@ class LogClient(discord.Client):
                         log = get_log(log_desc)
                         log_dict[log_desc["id"]] = log
 
-                    summary = summarize_log(log)
+                    summary = summarize_log(log, log_desc)
                     await fetch
                     user_obj = fetch.result()
-                    await user_obj.dm_channel.send(summary)
+                    channel = await user_obj.create_dm()
+                    await channel.send(summary)
 
-                    print(f"Log[{user.latest_log_id}] sent to {user_obj.Name}, {user.steam_id_64}.")
+                    print(f"Log[{user.latest_log_id}] sent to {user_obj.name}, {user.steam_id_64}.")
 
             await asyncio.sleep(30)
             
@@ -98,48 +102,46 @@ class LogClient(discord.Client):
         if message.author == self.user:
             return
 
-        print('Message from {0.author}: {0.content}'.format(message))
-        #contains command
-        if message.content[0] == CMD_PREFIX:
-            #dm only
-            if message.channel.id == message.author.dm_channel.id:
-                #subscribe cmd
-                if re.fullmatch("!subscribe +[0-9]{17} *", message.content) != None:
-                    res = re.findall("[0-9]{17}", message.content)
-                    steam_id = res[0]
-                    succ = self.subscribe_user(message.author.id, steam_id)
-                    if succ:
-                        await message.channel.send("You are now subscribed and will receive Logs!")
-                    else:
-                        await message.channel.send("You could not be subscribed.")
+        await self.process_commands(message)
 
-                #unsubscribe cmd
-                elif re.fullmatch("!unsubscribe *", message.content) != None:
-                    succ = self.unsubscribe_user(message.author.id)
-                    if succ:
-                        await message.channel.send("You are now unsubscribed and will not receive Logs!")
-                    else:
-                        await message.channel.send("You could not be unsubscribed.")
+        if message.channel.id == message.author.dm_channel.id and not message.content.startswith(CMD_PREFIX):
+            print('Message from {0.author}: {0.content}'.format(message))
+            await message.channel.send("Greetings, to find out, how to use me type !help.")
+            
+    
+    def _apply_commands(self):
+        @self.command(brief="Needs your steamID64. Adds you to the subscribed list.")
+        async def subscribe(ctx, steam_id_64):
+            succ = self.subscribe_user(ctx.message.author.id, steam_id_64)
+            if succ:
+                await ctx.send("You are now subscribed and will receive Logs!")
+            else:
+                await ctx.send("You could not be subscribed.")
 
-                #latest cmd for subscribers
-                elif re.fullmatch("!latest *", message.content) != None:
-                    u = self.get_subscribed_user(message.author.id)
 
-                    if u != None:
-                        summary = get_latest_log(u.steam_id_64)
-                        await message.channel.send(summary)
+        @self.command(brief="Removes you from the subscribed list.")
+        async def unsubscribe(ctx):
+            succ = self.unsubscribe_user(ctx.message.author.id)
+            if succ:
+                await ctx.send("You are now unsubscribed and will not receive Logs!")
+            else:
+                await ctx.send("You could not be unsubscribed.")
 
-                #latest cmd without subscription
-                elif re.fullmatch("!latest +[0-9]{17} *", message.content) != None:
-                    res = re.findall("[0-9]{17}", message.content)
-                    steam_id = res[0]
-                    summary = get_latest_log(steam_id)
-                    await message.channel.send(summary)
 
-                #cmd not found
-                else:
-                    await message.channel.send("Command not found!")
+        @self.command(brief="Returns you latest log")
+        async def latest(ctx, steam_id_64=None):
+            if steam_id_64 == None:
+                u = self.get_subscribed_user(ctx.message.author.id)
+                steam_id_64 = u.steam_id_64
+            
+            summary = get_latest_log(steam_id_64)
+            await ctx.send(summary)
 
+
+        @subscribe.error
+        async def info_error(ctx, error):
+            if isinstance(error, commands.BadArgument):
+             await ctx.send('You have forgotten the steamID64!')
 
                     
 
