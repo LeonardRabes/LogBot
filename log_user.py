@@ -6,6 +6,7 @@ class LogUser:
     def __init__(self, discord_user_id, steam_id_64):
         self.discord_user_id = discord_user_id
         self.steam_id_64 = steam_id_64
+        self.latest_log_id = None
 
 
     def is_online(self):
