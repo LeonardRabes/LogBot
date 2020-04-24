@@ -1,7 +1,14 @@
 from bot import LogClient
+from file_io import save_users, load_users, load_token
 
 def main():
-    client = LogClient("NzAyOTU5MjY1Mjg3MjQxODE4.XqH41Q.tpKs9k5tb8EJzc1bZQG-CSwPslw")
+    token = load_token()
+    client = LogClient(token)
+    client.subscribed_users = load_users()
+
+    client.events.on_subscribe += save_users
+    client.events.on_unsubscribe += save_users
+
     client.run()
 
 if __name__ == "__main__":

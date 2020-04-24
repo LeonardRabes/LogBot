@@ -3,16 +3,19 @@ import re
 import asyncio
 from tf_logs import get_player_log_list, get_latest_log_descr, get_log, summarize_log, get_latest_log
 from log_user import LogUser
+from events import Events
 
 
 CMD_PREFIX = "!"
 
 
 class LogClient(discord.Client):
+    __events__ = ('on_subscribe', 'on_unsubscribe', )
     def __init__(self, token):
         super(LogClient, self).__init__()
         self.token = token
         self.subscribed_users = []
+        self.events = Events()
 
 
     def run(self):
@@ -34,6 +37,8 @@ class LogClient(discord.Client):
         u = LogUser(discord_user_id, steam_id_64)
         self.subscribed_users.append(u)
 
+        self.events.on_subscribe(self, u) #fire on_subscribe event
+
         return True
 
 
@@ -44,6 +49,9 @@ class LogClient(discord.Client):
             return False
 
         self.subscribed_users.remove(u)
+
+        self.events.on_unsubscribe(self, u) #fire on_unsubscribe event
+
         return True
 
 
@@ -52,19 +60,16 @@ class LogClient(discord.Client):
             print("Log Update!")
             log_dict = {} #contains all logs of current update with log id as key
             for user in self.subscribed_users:
-                fetch = asyncio.create_task(user.fetch_user(self))
-
+                
                 log_list = get_player_log_list(user.steam_id_64)
                 log_desc = get_latest_log_descr(log_list)
-
-                await fetch
-                user_obj = fetch.result()
 
                 if user.latest_log_id == None: #only run in the initial log request of user
                     user.latest_log_id = log_desc["id"]
 
                 elif user.latest_log_id != log_desc["id"]:
                     user.latest_log_id = log_desc["id"]
+                    fetch = asyncio.create_task(user.fetch_user(self))
 
                     if log_desc["id"] in log_dict:
                         log = log_dict[log_desc["id"]]
@@ -73,6 +78,8 @@ class LogClient(discord.Client):
                         log_dict[log_desc["id"]] = log
 
                     summary = summarize_log(log)
+                    await fetch
+                    user_obj = fetch.result()
                     await user_obj.dm_channel.send(summary)
 
                     print(f"Log[{user.latest_log_id}] sent to {user_obj.Name}, {user.steam_id_64}.")
