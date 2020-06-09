@@ -2,7 +2,7 @@ import json
 from log_user import LogUser
 
 USER_SAVE_PATH = "./sub_users.json"
-TOKEN_SAVE_PATH = "./token.json"
+SECRET_SAVE_PATH = "./secret.json"
 
 def save_users(sender, new_user):
     data = []
@@ -24,8 +24,8 @@ def load_users():
 
     return users
 
-def load_token():
-    with open(TOKEN_SAVE_PATH, "r") as f:
+def load_secret():
+    with open(SECRET_SAVE_PATH, "r") as f:
         data = json.load(f)
 
-    return data["token"]
+    return (data["client_token"], data["bot_token"], data["steam_api_key"])

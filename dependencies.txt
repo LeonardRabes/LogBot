@@ -1,2 +1,2 @@
-discord.py
-pip install events
+https://discordpy.readthedocs.io/en/latest/
+https://github.com/pyeve/events

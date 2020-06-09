@@ -2,4 +2,4 @@
 __pycache__/*
 test.py
 sub_users.json
-token.json
+secret.json
